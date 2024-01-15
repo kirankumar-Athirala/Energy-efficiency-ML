@@ -7,9 +7,11 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 from sklearn.model_selection import train_test_split 
+from sklearn.metrics import confusion_matrix, f1_score
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
-refBuffer = 4000
 
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -48,8 +50,9 @@ def genDataSet():
     file_paths = filedialog.askopenfilenames(title=f"Select csv data files")
     for file_path in file_paths:
         signal = np.array(np.genfromtxt(file_path, delimiter=','))
-        data = np.delete(signal, np.s_[:refBuffer], 1)
-        x.append(data)
+        #data = np.delete(signal, np.s_[:refBuffer], 1)
+       
+        x.append(signal)
         y.extend([1 if label == 1 else 0 for label in signal[:, -1]])
 
     root.destroy()
@@ -67,11 +70,15 @@ def genDataSet():
 
     return x_data, y_data
 
-
-def train_model(model, criterion, optimizer, train_loader, val_loader, epochs=10):
+def train_model(model, criterion, optimizer, train_loader, val_loader, epochs=10, device="cpu"):
+    all_preds = []
+    all_labels = []
     for epoch in range(epochs):
         model.train()
         for inputs, labels in train_loader:
+            # Move inputs and labels to the device
+            inputs, labels = inputs.to(device), labels.to(device)
+            
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, labels)
@@ -82,18 +89,39 @@ def train_model(model, criterion, optimizer, train_loader, val_loader, epochs=10
         val_loss = 0.0
         correct = 0
         total = 0
+
         with torch.no_grad():
             for inputs, labels in val_loader:
+                # Move inputs and labels to the device
+                inputs, labels = inputs.to(device), labels.to(device)
+                
                 outputs = model(inputs)
                 val_loss += criterion(outputs, labels).item()
                 predicted = (outputs > 0.5).float()
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
+                all_preds.extend(predicted.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
 
         val_loss /= len(val_loader)
         accuracy = correct / total
 
         print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item():.4f}, Val Loss: {val_loss:.4f}, Val Accuracy: {accuracy:.4f}')
+
+        # Calculate F1 score and print confusion matrix
+    f1 = f1_score(all_labels, all_preds)
+    cm = confusion_matrix(all_labels, all_preds)
+    print(f'F1 Score: {f1:.4f}')
+    print('Confusion Matrix:')
+    print(cm)
+
+    # Plot and save confusion matrix as PNG
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['0', '1'], yticklabels=['0', '1'])
+    plt.title('Confusion Matrix')
+    plt.xlabel('Predicted')
+    plt.ylabel('True')
+    plt.savefig(f'/Users/kirankumarathirala/Documents/Energy-Efficiency/code/images/confusion_matrix_lstm.png')
 
 def estimate(model, inputSignal):
     model.eval()
@@ -105,16 +133,15 @@ def estimate(model, inputSignal):
 
 if __name__ == '__main__':
     # Select device based on availability
-    #device = "mps" if torch.backends.mps.is_available() else "cpu"
-    device = "cpu"
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    #device = "cpu"
 
-    x_data, y_data = genDataSet('Train')
+    x_data, y_data = genDataSet()
     # Split data into training and testing sets
     x_train, x_test_temp, y_train, y_test_temp = train_test_split(x_data, y_data, test_size=0.2, random_state=42)
 
     # Further split the training data into training and validation sets
     x_test, x_val, y_test, y_val = train_test_split(x_test_temp, y_test_temp, test_size=0.2, random_state=42)    
-
 
     # Convert data to PyTorch DataLoader
     train_dataset = TensorDataset(x_train, y_train)
@@ -131,8 +158,8 @@ if __name__ == '__main__':
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    # Train the model
-    train_model(model, criterion, optimizer, train_loader, val_loader, epochs=10)
+    # Train the model with device information
+    train_model(model, criterion, optimizer, train_loader, val_loader, epochs=30, device=device)
 
     # Convert test data to PyTorch tensor
     x_test = torch.FloatTensor(x_test).to(device)
