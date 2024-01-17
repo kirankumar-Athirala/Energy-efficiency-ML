@@ -12,8 +12,9 @@ import numpy as np
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import seaborn as sns
+import os
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 # Function for data loading and preprocessing
 def load_and_preprocess_data():
@@ -78,7 +79,8 @@ def load_and_preprocess_data():
 # Function for evaluating the model with F1 score and confusion matrix
 def evaluate_model(model, X_test, y_test):
     """
-    Evaluate the trained model on the testing set and print F1 score, confusion matrix, and plot the confusion matrix.
+    Evaluate the trained model on the testing set, print F1 score, confusion matrix, save the confusion matrix image,
+    and save the trained model.
 
     Args:
         model (torch.nn.Module): Trained neural network model.
@@ -103,14 +105,29 @@ def evaluate_model(model, X_test, y_test):
         print('Confusion Matrix:')
         print(cm)
 
-        # Plot Confusion Matrix
+        # Save Confusion Matrix Image
+        current_working_dir = os.getcwd()
+        save_path = os.path.join(current_working_dir, 'images')
+
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+
+        cm_image_path = os.path.join(save_path, 'confusion_matrix.png')
         plt.figure(figsize=(8, 6))
         sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', cbar=False)
         plt.xlabel('Predicted')
         plt.ylabel('Actual')
         plt.title('Confusion Matrix')
-        plt.savefig('confusion_matrix.png')
-        plt.show()
+        plt.savefig(cm_image_path)
+        plt.close()
+
+        print(f'Confusion Matrix image saved at: {cm_image_path}')
+
+        # Save Trained Model
+        model_path = os.path.join(save_path, 'trained_model.pth')
+        torch.save(model.state_dict(), model_path)
+
+        print(f'Trained model saved at: {model_path}')
 
     except Exception as e:
         print(f"Error in evaluate_model: {str(e)}")
