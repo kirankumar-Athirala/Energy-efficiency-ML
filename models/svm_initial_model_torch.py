@@ -6,9 +6,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.metrics import confusion_matrix, accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from tkinter import filedialog
 import tkinter as tk
-import joblib
+from tkinter import filedialog
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -17,6 +16,12 @@ import seaborn as sns
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 def load_data():
+    """
+    Load data from multiple CSV files selected by the user.
+
+    Returns:
+        np.ndarray: Loaded data.
+    """
     # Create the root window for the file dialog
     root = tk.Tk()
     root.withdraw()
@@ -33,6 +38,15 @@ def load_data():
     return data
 
 def preprocess_data(data):
+    """
+    Preprocess data by splitting into training and testing sets, scaling, and converting to PyTorch tensors.
+
+    Args:
+        data (np.ndarray): Input data.
+
+    Returns:
+        Tuple[torch.Tensor]: Processed data tensors.
+    """
     labels = data[:, -1]
     features = data[:, :-1]
 
@@ -51,7 +65,15 @@ def preprocess_data(data):
 
     return X_train_tensor, X_test_tensor, y_train_tensor, y_test_tensor, y_test
 
-def plot_confusion_matrix(conf_matrix, y_test):
+def plot_confusion_matrix(conf_matrix, y_test, save_path):
+    """
+    Plot and save the confusion matrix.
+
+    Args:
+        conf_matrix (np.ndarray): Confusion matrix.
+        y_test (np.ndarray): True labels.
+        save_path (str): Directory to save the plot.
+    """
     plt.figure(figsize=(8, 6))
     sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', cbar=False,
                 xticklabels=np.unique(y_test), yticklabels=np.unique(y_test))
@@ -59,20 +81,22 @@ def plot_confusion_matrix(conf_matrix, y_test):
     plt.ylabel('True Labels')
     plt.title('Confusion Matrix')
 
-    # Use current working directory and append 'images' folder
-    current_working_dir = os.getcwd()
-    save_path = os.path.join(current_working_dir, 'images')
-    
-    if not os.path.exists(save_path):
-        os.makedirs(save_path)
-    
     # Save Confusion Matrix plot as .png
-    conf_matrix_filename = os.path.join(save_path, 'svn_linear_confusion_matrix.png')
+    conf_matrix_filename = os.path.join(save_path, 'svm_linear_confusion_matrix.png')
     plt.savefig(conf_matrix_filename)
     print(f"Confusion Matrix plot saved to {conf_matrix_filename}")
-    
+
 def train_svm_model(X_train_tensor, y_train_tensor):
-    # Define a simple SVM model using PyTorch
+    """
+    Train a simple SVM model using PyTorch.
+
+    Args:
+        X_train_tensor (torch.Tensor): Input features for training.
+        y_train_tensor (torch.Tensor): True labels for training.
+
+    Returns:
+        nn.Module: Trained SVM model.
+    """
     class SVMModel(nn.Module):
         def __init__(self, input_size):
             super(SVMModel, self).__init__()
@@ -91,7 +115,7 @@ def train_svm_model(X_train_tensor, y_train_tensor):
 
     # Define loss function and optimizer
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = optim.Adam(svm_model.parameters(), lr=learning_rate,weight_decay=weight_decay)
+    optimizer = optim.Adam(svm_model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 
     # Train the SVM model
     for epoch in range(num_epochs):
@@ -106,7 +130,16 @@ def train_svm_model(X_train_tensor, y_train_tensor):
 
     return svm_model
 
-def evaluate_model(svm_model, X_test_tensor, y_test):
+def evaluate_model(svm_model, X_test_tensor, y_test, save_path):
+    """
+    Evaluate the SVM model and print metrics.
+
+    Args:
+        svm_model (nn.Module): Trained SVM model.
+        X_test_tensor (torch.Tensor): Input features for testing.
+        y_test (np.ndarray): True labels for testing.
+        save_path (str): Directory to save the plot.
+    """
     with torch.no_grad():
         y_pred_tensor = svm_model(X_test_tensor)
         y_pred = (y_pred_tensor >= 0).cpu().numpy().astype(int).squeeze()
@@ -123,12 +156,17 @@ def evaluate_model(svm_model, X_test_tensor, y_test):
     print(conf_matrix)
 
     # Plot Confusion Matrix
-    plot_confusion_matrix(conf_matrix, y_test)
+    plot_confusion_matrix(conf_matrix, y_test, save_path)
 
+def save_model(svm_model, model_filename='best_svm_model.pth'):
+    """
+    Save the trained SVM model to a file.
 
-def save_model(svm_model):
+    Args:
+        svm_model (nn.Module): Trained SVM model.
+        model_filename (str): Name of the model file.
+    """
     # Save the model to a file
-    model_filename = 'best_svm_model.pth'
     torch.save(svm_model.state_dict(), model_filename)
     print(f"Model saved to {model_filename}")
 
@@ -136,5 +174,10 @@ if __name__ == "__main__":
     data = load_data()
     X_train_tensor, X_test_tensor, y_train_tensor, y_test_tensor, y_test = preprocess_data(data)
     svm_model = train_svm_model(X_train_tensor, y_train_tensor)
-    evaluate_model(svm_model, X_test_tensor, y_test)
+    
+    # Create the 'images' folder if it doesn't exist
+    save_path = os.path.join(os.getcwd(), 'images')
+    os.makedirs(save_path, exist_ok=True)
+
+    evaluate_model(svm_model, X_test_tensor, y_test, save_path)
     save_model(svm_model)
