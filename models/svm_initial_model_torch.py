@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -32,11 +33,11 @@ def load_data():
     return data
 
 def preprocess_data(data):
-    y = data[:, -1]
-    X = data[:, :-1]
+    labels = data[:, -1]
+    features = data[:, :-1]
 
     # Split the data into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=42)
     
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
@@ -58,8 +59,15 @@ def plot_confusion_matrix(conf_matrix, y_test):
     plt.ylabel('True Labels')
     plt.title('Confusion Matrix')
 
+    # Use current working directory and append 'images' folder
+    current_working_dir = os.getcwd()
+    save_path = os.path.join(current_working_dir, 'images')
+    
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    
     # Save Confusion Matrix plot as .png
-    conf_matrix_filename = '/Users/kirankumarathirala/Documents/Energy-Efficiency/code/SVM_initial_confusion_matrix.png'
+    conf_matrix_filename = os.path.join(save_path, 'svn_linear_confusion_matrix.png')
     plt.savefig(conf_matrix_filename)
     print(f"Confusion Matrix plot saved to {conf_matrix_filename}")
     
