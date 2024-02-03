@@ -1,11 +1,12 @@
+import os
 import numpy as np
 import tkinter as tk
 from tkinter import filedialog
 from sklearn.model_selection import train_test_split 
-from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
+from sklearn.metrics import f1_score, accuracy_score,confusion_matrix,ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 import seaborn as sns
-from keras.models import Sequential
+from keras.models import Sequential, load_model
 from keras.layers import LSTM, Dense, Dropout
 from keras.optimizers import Adam
 from keras.regularizers import L1L2
@@ -21,7 +22,7 @@ def load_data():
     file_paths = filedialog.askopenfilenames(title=f"Select csv data files")
     for file_path in file_paths:
         signal = np.array(np.genfromtxt(file_path, delimiter=','))
-        x.append(signal)
+        x.append(signal[:, :-1])
         y.extend([1 if label == 1 else 0 for label in signal[:, -1]])
 
     root.destroy()
@@ -52,11 +53,15 @@ def build_model(input_shape, hidden_size):
     model.compile(optimizer=Adam(learning_rate=1e-3), loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
-def train_model(model, x_train, y_train, x_val, y_val, epochs, batch_size):
+def train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path):
     history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, validation_data=(x_val, y_val))
+    # Save the trained model
+    model.save(model_save_path)
     return history
 
-def evaluate_model(model, x_test, y_test):
+def evaluate_model_with_saved_model(model_path, x_test, y_test):
+    # Load the saved model
+    model = load_model(model_path)
     y_pred = model.predict(x_test)
     y_pred_binary = (y_pred > 0.5).astype(int)
     # F1 Score
@@ -67,28 +72,27 @@ def evaluate_model(model, x_test, y_test):
     test_acc = (y_pred_binary == y_test).sum().item() / len(y_test)
     return y_pred_binary, test_acc
 
-def plot_confusion_matrix(y_true, y_pred):
+def plot_confusion_matrix(save_folder,y_true, y_pred):
 
+    cm_image_path = os.path.join(save_folder, 'lstm_confussion_matrix.png')
     cm = confusion_matrix(y_true, y_pred)
     print('Confusion Matrix:')
     print(cm)
 
     # Plot and save confusion matrix as PNG
     plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=['0', '1'], yticklabels=['0', '1'])
-    plt.title('Confusion Matrix')
-    plt.xlabel('Predicted')
-    plt.ylabel('True')
-    plt.savefig(f'/Users/kirankumarathirala/Documents/Energy-Efficiency/code/images/confusion_matrix_lstm.png')
-    
-    
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=np.unique(y_true))
+    disp.plot(cmap='Blues', values_format='d')
+    plt.title('LSTM Confusion Matrix')
+    plt.savefig(cm_image_path)
+    plt.close()
+    print(f'Confusion Matrix image saved at: {cm_image_path}')
 
 if __name__ == '__main__':
     x_data, y_data = load_data()
     x_train, y_train, x_val, y_val, x_test, y_test = split_data(x_data, y_data)
     
     input_shape = (x_train.shape[1], x_train.shape[2])
-
     hidden_size = 128
     
     model = build_model(input_shape, hidden_size)
@@ -97,10 +101,23 @@ if __name__ == '__main__':
     
     epochs = 30
     batch_size = hidden_size
+
+# Save Confusion Matrix Image
+    current_working_dir = os.getcwd()
+    save_folder = os.path.join(current_working_dir, 'images')
+        
+    model_folder = os.path.join(current_working_dir, 'trained-models')
+
+    if not os.path.exists(save_folder):
+        os.makedirs(save_folder)
+            
+    if not os.path.exists(model_folder):
+        os.makedirs(model_folder)
+
+    model_save_path = os.path.join(model_folder, 'LSTM_saved_model.hs')  
     
-    history = train_model(model, x_train, y_train, x_val, y_val, epochs, batch_size)
+    history = train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path)
     
-    y_pred_binary, test_acc = evaluate_model(model, x_test, y_test)
+    y_pred_binary, test_acc = evaluate_model_with_saved_model(model_save_path, x_test, y_test)
     print('\nTest accuracy:', test_acc)
-    
-    plot_confusion_matrix(y_test, y_pred_binary)
+    plot_confusion_matrix(save_folder,y_test, y_pred_binary)
