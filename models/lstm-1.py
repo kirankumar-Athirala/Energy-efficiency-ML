@@ -2,7 +2,7 @@ import numpy as np
 import tkinter as tk
 from tkinter import filedialog
 from sklearn.model_selection import train_test_split 
-from sklearn.metrics import confusion_matrix, f1_score, accuracy
+from sklearn.metrics import confusion_matrix, f1_score, accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 from keras.models import Sequential
