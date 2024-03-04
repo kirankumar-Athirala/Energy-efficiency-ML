@@ -3,14 +3,14 @@ import numpy as np
 import tkinter as tk
 from tkinter import filedialog
 from sklearn.model_selection import train_test_split 
-from sklearn.metrics import f1_score, accuracy_score,confusion_matrix,ConfusionMatrixDisplay
+from sklearn.metrics import f1_score, accuracy_score, confusion_matrix,ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
-import seaborn as sns
-from keras.models import Sequential, load_model
-from keras.layers import LSTM, Dense, Dropout
-from keras.optimizers import Adam
-from keras.regularizers import L1L2
-from keras.layers import BatchNormalization
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
+from tensorflow.keras.optimizers.legacy import Adam
+from tensorflow.keras.regularizers import L1L2
+from tensorflow.keras.metrics import BinaryAccuracy
+from tensorflow.math import confusion_matrix as tf_confusion_matrix
 
 def load_data():
     y = []
@@ -29,10 +29,12 @@ def load_data():
 
     x_data = np.vstack(x)
     y_data = np.vstack(y).reshape(-1, 1)
-
+    
+    
     sequence_length = 1
     x_data = x_data.reshape(-1, sequence_length, x_data.shape[1])
 
+    
     return x_data, y_data
 
 def split_data(x_data, y_data):
@@ -72,9 +74,8 @@ def evaluate_model_with_saved_model(model_path, x_test, y_test):
     test_acc = (y_pred_binary == y_test).sum().item() / len(y_test)
     return y_pred_binary, test_acc
 
-def plot_confusion_matrix(save_folder,y_true, y_pred):
-
-    cm_image_path = os.path.join(save_folder, 'lstm_confussion_matrix.png')
+def plot_confusion_matrix(save_folder, y_true, y_pred):
+    cm_image_path = os.path.join(save_folder, 'lstm_confusion_matrix.png')
     cm = confusion_matrix(y_true, y_pred)
     print('Confusion Matrix:')
     print(cm)
@@ -93,6 +94,7 @@ if __name__ == '__main__':
     x_train, y_train, x_val, y_val, x_test, y_test = split_data(x_data, y_data)
     
     input_shape = (x_train.shape[1], x_train.shape[2])
+    
     hidden_size = 128
     
     model = build_model(input_shape, hidden_size)
@@ -100,9 +102,9 @@ if __name__ == '__main__':
     model.summary()
     
     epochs = 30
-    batch_size = hidden_size
+    batch_size = 128
 
-# Save Confusion Matrix Image
+    # Save Confusion Matrix Image
     current_working_dir = os.getcwd()
     save_folder = os.path.join(current_working_dir, 'images')
         
@@ -116,8 +118,27 @@ if __name__ == '__main__':
 
     model_save_path = os.path.join(model_folder, 'LSTM_saved_model.hs')  
     
-    history = train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path)
     
+    history = train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path)
+    # Plot training and validation loss
+    plt.figure(figsize=(12, 6))
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.show()
+
+    # Plot training and validation accuracy
+    plt.figure(figsize=(12, 6))
+    plt.plot(history.history['accuracy'], label='Training Accuracy')
+    plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.show()
     y_pred_binary, test_acc = evaluate_model_with_saved_model(model_save_path, x_test, y_test)
     print('\nTest accuracy:', test_acc)
-    plot_confusion_matrix(save_folder,y_test, y_pred_binary)
+    plot_confusion_matrix(save_folder, y_test, y_pred_binary)
