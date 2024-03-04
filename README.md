@@ -35,4 +35,18 @@ The LSTM model is built using TensorFlow and Keras libraries. It is designed to 
 ### Installation
 
 1. Clone the repository:
+    https://github.com/kirankumar-Athirala/Energy-efficiency-ML.git
+2. Install dependencies
+   pip install -r requirements.txt
 
+### Running the Code
+
+1. Navigate to the repository directory:
+   Energy-efficiency-ML/models
+2. Run the main script:
+   python lstm-1.py
+3. Follow the prompts to select CSV data files and observe the model training and evaluation process.
+
+## License
+
+This project is licensed under the MIT License.
