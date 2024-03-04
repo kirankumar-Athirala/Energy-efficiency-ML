@@ -2,16 +2,37 @@ import os
 import numpy as np
 import tkinter as tk
 from tkinter import filedialog
-from sklearn.model_selection import train_test_split 
-from sklearn.metrics import f1_score, accuracy_score, confusion_matrix,ConfusionMatrixDisplay
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score, accuracy_score, confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
 from tensorflow.keras.optimizers.legacy import Adam
 from tensorflow.keras.regularizers import L1L2
-from tensorflow.keras.metrics import BinaryAccuracy
-from tensorflow.math import confusion_matrix as tf_confusion_matrix
+from tensorflow.keras.callbacks import ModelCheckpoint, Callback
+from tensorflow.keras import backend as K
 
+# Definition of the CustomCallback
+class CustomCallback(Callback):
+    def __init__(self, file_path):
+        super(CustomCallback, self).__init__()
+        self.file_path = file_path
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        # Initialize the file if it does not exist
+        if not os.path.isfile(file_path):
+            with open(file_path, 'w') as f:
+                f.write("Epoch, Loss, Val Loss\n")
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        loss = logs.get('loss')
+        val_loss = logs.get('val_loss')
+        with open(self.file_path, 'a') as f:
+            f.write(f"{epoch + 1}, {loss}, {val_loss}\n")
+        print(f"CustomCallback: Epoch {epoch + 1} completed. Loss: {loss}, Val Loss: {val_loss}")
+
+           
 def load_data():
     y = []
     x = []
@@ -55,9 +76,31 @@ def build_model(input_shape, hidden_size):
     model.compile(optimizer=Adam(learning_rate=1e-3), loss='binary_crossentropy', metrics=['accuracy'])
     return model
 
-def train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path):
-    history = model.fit(x_train, y_train, batch_size=batch_size, epochs=epochs, validation_data=(x_val, y_val))
-    # Save the trained model
+
+def train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path, initial_epoch=0):
+    checkpoint_path = model_save_path.replace('.hs', '_checkpoint.h5')
+    checkpoint = ModelCheckpoint(
+        checkpoint_path,
+        monitor='val_loss',
+        verbose=1,
+        save_best_only=True,
+        mode='min'
+    )
+    
+    current_working_dir = os.getcwd()
+    metadata_file_path = os.path.join(current_working_dir, 'trained-models','training_metadata.txt')
+    
+    custom_callback = CustomCallback(file_path=metadata_file_path)  # Custom callback instance
+
+    history = model.fit(
+        x_train,
+        y_train,
+        batch_size=batch_size,
+        epochs=epochs,
+        validation_data=(x_val, y_val),
+        callbacks=[checkpoint, custom_callback],
+        initial_epoch=initial_epoch
+    )
     model.save(model_save_path)
     return history
 
@@ -88,38 +131,50 @@ def plot_confusion_matrix(save_folder, y_true, y_pred):
     plt.savefig(cm_image_path)
     plt.close()
     print(f'Confusion Matrix image saved at: {cm_image_path}')
+def get_initial_epoch():
+    try:
+        with open('training_metadata.txt', 'r') as f:
+            lines = f.readlines()
+            last_line = lines[-1]
+            initial_epoch = int(last_line.split(',')[0].split(': ')[1])
+            return initial_epoch
+    except FileNotFoundError:
+        return 0
+    
 
 if __name__ == '__main__':
     x_data, y_data = load_data()
     x_train, y_train, x_val, y_val, x_test, y_test = split_data(x_data, y_data)
-    
     input_shape = (x_train.shape[1], x_train.shape[2])
-    
     hidden_size = 128
+
+    current_working_dir = os.getcwd()
+    model_folder = os.path.join(current_working_dir, 'trained-models')
+    model_save_path = os.path.join(model_folder, 'LSTM_saved_model.hs')
+    checkpoint_path = model_save_path.replace('.hs', '_checkpoint.h5')
+
+    if os.path.exists(checkpoint_path):
+        print("Loading model from checkpoint.")
+        model = load_model(checkpoint_path)
+    else:
+        print("Building new model.")
+        model = build_model(input_shape, hidden_size)
     
-    model = build_model(input_shape, hidden_size)
-    print("Model Summary:")
     model.summary()
-    
+
     epochs = 30
     batch_size = 128
 
-    # Save Confusion Matrix Image
-    current_working_dir = os.getcwd()
     save_folder = os.path.join(current_working_dir, 'images')
-        
-    model_folder = os.path.join(current_working_dir, 'trained-models')
-
     if not os.path.exists(save_folder):
         os.makedirs(save_folder)
             
     if not os.path.exists(model_folder):
         os.makedirs(model_folder)
 
-    model_save_path = os.path.join(model_folder, 'LSTM_saved_model.hs')  
-    
-    
-    history = train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path)
+    initial_epoch = get_initial_epoch()
+
+    history = train_model_and_save(model, x_train, y_train, x_val, y_val, epochs, batch_size, model_save_path, initial_epoch=initial_epoch)
     # Plot training and validation loss
     plt.figure(figsize=(12, 6))
     plt.plot(history.history['loss'], label='Training Loss')
